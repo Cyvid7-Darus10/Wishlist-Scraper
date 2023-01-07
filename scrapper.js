@@ -1,21 +1,40 @@
-const request = require("request-promise");
 const cheerio = require("cheerio");
+const puppeteer = require("puppeteer");
 
 // Load HTML from a URL
 async function loadURL(url) {
-  const options = {
-    url: url,
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36",
-    },
-  };
   try {
-    let html = await request(options);
+    const browser = await puppeteer.launch({
+      headless: false,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+    const page = await browser.newPage();
+    await page.goto(url);
+
+    // scroll down to load all products
+    await page.evaluate(async () => {
+      await new Promise((resolve, reject) => {
+        let totalHeight = 0;
+        let distance = 100;
+        let timer = setInterval(() => {
+          let scrollHeight = document.body.scrollHeight;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+
+          if (totalHeight >= scrollHeight) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 100);
+      });
+    });
+
+    let html = await page.content();
+    await browser.close();
     return html;
-  } catch {
-    console.error("Error!!!");
-    return "... URL Load Error!!!";
+  } catch (error) {
+    console.log(error);
+    return "Error";
   }
 }
 
@@ -30,13 +49,15 @@ async function productScraper(url) {
   $(".g-item-sortable", wishlistItems).each(function () {
     let price = $(this).attr("data-price");
     let currency = $(this).find(".a-price-symbol").text();
-    if (!currency) {
+
+    // check if currency has numbers
+    if (!currency || currency.match(/\d/)) {
       currency = $(this).find(".itemUsedAndNewPrice").text();
       //remove spaces
       currency = currency.replace(/\s/g, "");
       currency = currency.slice(0, 1);
     }
-    let name = $(this).find("h3 .a-link-normal").attr("title") ?? "";
+    let name = $(this).find(".a-link-normal").attr("title") ?? "";
     let image = $(this).find(".g-itemImage img").attr("src") ?? "";
     let params = JSON.parse($(this).attr("data-reposition-action-params"));
     let randomize = Math.floor(Math.random() * 1000000000000000);
@@ -50,7 +71,7 @@ async function productScraper(url) {
       image: image,
       name: name,
       price: {
-        currency: currency ? currency : "None",
+        currency: currency ? currency[0] : "None",
         value: price === "-Infinity" ? 0 : price,
       },
       url: link,
