@@ -1,36 +1,30 @@
-const PORT = 8000;
-const axios = require("axios");
-const cheerio = require("cheerio");
 const express = require("express");
-const app = express();
+const server = express();
 const cors = require("cors");
-app.use(cors());
+const port = process.env.PORT || 8080;
 
-const url = "https://www.theguardian.com/uk";
+const productScrapper = require("./scrapper.js");
 
-app.get("/", function (req, res) {
-  res.json("Testing Nodejs Web Scraper");
+server.use(express.json());
+server.use(express.urlencoded({ extended: true }));
+server.use(cors());
+
+server.get("/", (req, res) => {
+  res.json({ message: "Welcome to the scrapper" });
 });
 
-app.get("/results", (req, res) => {
-  axios(url)
-    .then((response) => {
-      const html = response.data;
-      const $ = cheerio.load(html);
-      const articles = [];
+server.get("/wishlist", async (req, res) => {
+  let url = req.query.url;
+  console.log(url);
 
-      $(".fc-item__title", html).each(function () {
-        //<-- cannot be a function expression
-        const title = $(this).text();
-        const url = $(this).find("a").attr("href");
-        articles.push({
-          title,
-          url,
-        });
-      });
-      res.json(articles);
-    })
-    .catch((err) => console.log(err));
+  if (!url) {
+    res.json({ message: "URL parameter not received" });
+  } else {
+    let results = await productScrapper(url);
+    res.json(results);
+  }
 });
 
-app.listen(PORT, () => console.log(`server running on PORT ${PORT}`));
+server.listen(port, () => {
+  console.log(`Server listening at ${port}`);
+});
